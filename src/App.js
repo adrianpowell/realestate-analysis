@@ -5,12 +5,24 @@ import {LineChart, Line, CartesianGrid, XAxis, YAxis, Legend, Tooltip} from 'rec
 
 function App() {
 
+  const tableStyle = {
+    border: "1px solid black",
+    borderCollapse: "collapse"
+  }
+  const tableHeaderCellStyle = {
+    border: "1px solid black",
+    padding: "3px"
+  }
+  const tableCellStyle = {
+    border: "1px solid black"
+  }
+
   const [purchasePrice, setPurchasePrice] = useState(650000),
     [downPamentPercent, setDownPaymentPercent] = useState(20.0),
-    [ammortizationPeriod, setAmmortizationPeriod] = useState(25),
-    [mortgageRate, setMortgageRate] = useState(2.0),
+    [ammortizationPeriod, setAmmortizationPeriod] = useState(20),
+    [mortgageRate, setMortgageRate] = useState(3.0),
     [annualPropertyTaxes, setAnnualPropertyTaxes] = useState(2000),
-    [strataFees, setStrataFees] = useState(750),
+    [strataFees, setStrataFees] = useState(400),
     [annualMaintenance, setAnnualMaintenance] = useState(1000),
     [annualGrowthRate, setAnnualGrowthRate] = useState(0.0),
     
@@ -18,7 +30,7 @@ function App() {
     [realtorCommissionPercent, setRealtorCommissionPercent] = useState(6.0),
     
     // opportunity cost
-    [investmentReturnPercentage, setInvestmentReturnPercentage] = useState(5.0),
+    [investmentReturnPercentage, setInvestmentReturnPercentage] = useState(6.5),
     
     // rental comparison
     [comparableMonthlyRent, setComparableMonthlyRent] = useState(2400),
@@ -47,20 +59,26 @@ function App() {
     const annualMortgagePayment = mortgage * (mortgageRateDec * Math.pow(1 + mortgageRateDec, ammortizationPeriod)) /
         (Math.pow(1 + mortgageRateDec, ammortizationPeriod) - 1);
 
-    let tmpAnnualHouseExpense = (12 * strataFees) + annualMaintenance + annualMortgagePayment + annualPropertyTaxes;
+    let tmpAnnualHouseExpense = (12 * strataFees) + annualMaintenance + annualPropertyTaxes;
     console.log("annual house expense: ", tmpAnnualHouseExpense, annualPropertyTaxes, (12 * strataFees),
         annualMaintenance, annualMortgagePayment);
     setAnnualHouseExpense(tmpAnnualHouseExpense);
     setAnnualRent(12 * comparableMonthlyRent);
-    let tmpInvestmentDelta = tmpAnnualHouseExpense - (12*comparableMonthlyRent);
+    let tmpInvestmentDelta = tmpAnnualHouseExpense + annualMortgagePayment - (12*comparableMonthlyRent);
     setInvestmentDelta(tmpInvestmentDelta);
 
     //let newData = [];
     let i;
-    setData(drawdownRate.map(drawdown => {
+    let newStateData = drawdownRate.map(drawdown => {
       let currHousePrice = purchasePrice * drawdown;
+      let currRemainingMortgage = purchasePrice - downpayment;
       let currInvestmentEquity = downpayment;
       let newData = [];
+      let totalInvestmentInterest = 0;
+      let totalHouseHoldingCosts = 0;
+      let totalHousingInterest = 0;
+      let totalInvestmentSavings = 0;
+      yearRange = [...Array(yearsToRun).keys()];
       for (i = 1; i < yearsToRun; i++) {
         currHousePrice = currHousePrice * (1.0 + (annualGrowthRate/100.0));
 
@@ -68,7 +86,16 @@ function App() {
         const remainingLoanBalance = mortgage
             * (Math.pow(1 + mortgageRateDec, ammortizationPeriod) - Math.pow(1 + mortgageRateDec, i))
             / (Math.pow(1 + mortgageRateDec, ammortizationPeriod) - 1);
-        currInvestmentEquity = (currInvestmentEquity + tmpInvestmentDelta) * (1.0 + (investmentReturnPercentage/100.0));
+        // the difference between what we paid and how much loan decreases
+        let currHousingInterestPaid = annualMortgagePayment - (currRemainingMortgage - remainingLoanBalance);
+        currRemainingMortgage = remainingLoanBalance;
+        totalHousingInterest = totalHousingInterest + currHousingInterestPaid;
+        totalHouseHoldingCosts = totalHouseHoldingCosts + tmpAnnualHouseExpense;
+
+        let currInvestmentInterest = (currInvestmentEquity + tmpInvestmentDelta) * (investmentReturnPercentage/100.0);
+        currInvestmentEquity = (currInvestmentEquity + tmpInvestmentDelta) + currInvestmentInterest;
+        totalInvestmentInterest = totalInvestmentInterest + currInvestmentInterest;
+        totalInvestmentSavings = totalInvestmentSavings + tmpInvestmentDelta;
 
         let currHouseEquity = (currHousePrice - remainingLoanBalance) -
             (currHousePrice * realtorCommissionPercent / 100.0);
@@ -76,11 +103,19 @@ function App() {
         newData.push({
           name: i,
           investmentNetEquity: Math.round(currInvestmentEquity/1000),
-          homeNetEquity: Math.round(currHouseEquity/1000)
+          homeNetEquity: Math.round(currHouseEquity/1000),
+          totalHousingInterestPaid: totalHousingInterest,
+          currHousingInterestPaid: currHousingInterestPaid,
+          housePrice: Math.round(currHousePrice/1000),
+          totalHouseHoldingCosts: totalHouseHoldingCosts,
+          investmentSavings: totalInvestmentSavings,
+          totalInvestmentInterest: totalInvestmentInterest
         });
       }
       return newData;
-    }));
+    });
+    console.log('Updating data: ', newStateData);
+    setData(newStateData);
   };
 
   useEffect(() => {
@@ -88,6 +123,14 @@ function App() {
   }, [purchasePrice, ammortizationPeriod, mortgageRate, annualPropertyTaxes, strataFees, annualMaintenance,
   realtorCommissionPercent, investmentReturnPercentage, comparableMonthlyRent, yearsToRun, annualGrowthRate]);
 
+  let yearRange = [...Array(yearsToRun).keys()];
+
+  // let tableData = this.state.data.map((yearData) =>
+  //   <tr>
+  //     <td>{yearData.name}</td>
+  //     <td>{yearData.investmentNetEquity}</td>
+  //   </tr>
+  // );
   return (
     <div className="App">
       <header>
@@ -193,8 +236,13 @@ function App() {
       </form>
       <hr/>
       <Tabs>
-        { [0, 1,2,3,4].map(index =>
-          <Tab eventKey={index} title={"Drawdown: " + Math.round((1-drawdownRate[index])*100) + "%"}>
+        { [0, 1, 2, 3, 4].map(index => {
+          console.log('data[index]', data[index]);
+          if (data[index] === undefined || data[index].length === 0) {
+            return (<div></div>)
+          }
+          return (
+            <Tab eventKey={index} title={"Drawdown: " + Math.round((1-drawdownRate[index])*100) + "%"}>
             <Container>
             <Row>
               <Col>
@@ -214,8 +262,48 @@ function App() {
                 <Row>Annual investment delta: {currencyFormatter.format(investmentDelta)}</Row>
               </Col>
             </Row>
+            <Row>
+              <table style={tableStyle}>
+                <thead>
+                  <tr>
+                    <th style={tableHeaderCellStyle}>Year</th>
+                    <th style={tableHeaderCellStyle}>Investment total</th>
+                    <th style={tableHeaderCellStyle}>Investment total interest</th>
+                    <th style={tableHeaderCellStyle}>Investment savings</th>
+                    <th style={tableHeaderCellStyle}>House total value</th>
+                    <th style={tableHeaderCellStyle}>House equity</th>
+                    <th style={tableHeaderCellStyle}>House total interest paid</th>
+                    <th style={tableHeaderCellStyle}>House total holding costs (ex mortgage)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                { yearRange.map(yearIndex => {
+                  let yearData = data[index][yearIndex];
+                  console.log('yearData', yearData);
+                  if (yearData === undefined) {
+                    return(<tr></tr>)
+                  }
+                  return(
+                    <tr key={yearIndex}>
+                      <td style={tableCellStyle}>{yearData.name}</td>
+                      <td style={tableCellStyle}>${yearData.investmentNetEquity}k</td>
+                      <td style={tableCellStyle}>${Math.round(yearData.totalInvestmentInterest/1000)}k</td>
+                      <td style={tableCellStyle}>${Math.round(yearData.investmentSavings/1000)}k</td>
+                      <td style={tableCellStyle}>${yearData.housePrice}k</td>
+                      <td style={tableCellStyle}>${yearData.homeNetEquity}</td>
+                      <td style={tableCellStyle}>${Math.round(yearData.totalHousingInterestPaid/1000)}k</td>
+                      <td style={tableCellStyle}>${Math.round(yearData.totalHouseHoldingCosts/1000)}k</td>
+                    </tr>
+                    )
+                  })
+                }
+                </tbody>
+              </table>
+            </Row>
             </Container>
           </Tab>
+          )
+        }
         )}
       </Tabs>
     </div>
